@@ -1,6 +1,10 @@
 package TD.example.hello_student.controller;
 
 import TD.example.hello_student.entity.Student;
+import TD.example.hello_student.exception.BadRequestException;
+import TD.example.hello_student.service.StudentService;
+import TD.example.hello_student.validator.StudentValidator;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,37 +13,30 @@ import java.util.stream.Collectors;
 @RestController
 public class StudentController {
 
+    private final StudentService studentService;
+    private final StudentValidator studentValidator;
 
-    private final List<Student> students = new ArrayList<>();
-
-
-    @GetMapping("/welcome")
-    public String welcome(@RequestParam(name = "name") String name) {
-        return "Welcome " + name;
+    // Injection des dépendances
+    public StudentController(StudentService studentService, StudentValidator studentValidator) {
+        this.studentService = studentService;
+        this.studentValidator = studentValidator;
     }
-
 
     @PostMapping("/students")
-    public String addStudents(@RequestBody List<Student> newStudents) {
+    public ResponseEntity<?> createStudents(@RequestBody List<Student> newStudents) {
+        try {
+            // 1. Déléguer la validation
+            for (Student s : newStudents) {
+                studentValidator.validate(s);
+            }
+            // 2. Déléguer la sauvegarde
+            studentService.saveAll(newStudents);
 
-        this.students.addAll(newStudents);
+            return ResponseEntity.ok(studentService.getAll());
 
-
-        return students.stream()
-                .map(s -> s.getFirstName() + " " + s.getLastName())
-                .collect(Collectors.joining(", "));
-    }
-
-
-    @GetMapping("/students")
-    public String getStudents(@RequestHeader(name = "Accept") String acceptHeader) {
-        if ("text/plain".equals(acceptHeader)) {
-            // Retourne les noms formatés en texte
-            return students.stream()
-                    .map(s -> s.getFirstName() + " " + s.getLastName())
-                    .collect(Collectors.joining("\n"));
-        } else {
-            return "Format non supporté";
+        } catch (BadRequestException e) {
+            // 3. Gérer l'exception spécifique
+            return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
 }
